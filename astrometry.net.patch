@@ -186,10 +186,10 @@ index 0135151a..01f8a9d0 100644
  int log_get_level(void);
  
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
-index 780c4b91..28178a83 100644
+index 780c4b91..60f4c236 100644
 --- a/include/astrometry/os-features.h
 +++ b/include/astrometry/os-features.h
-@@ -18,6 +18,83 @@
+@@ -18,6 +18,100 @@
  #define	MAX(a,b) (((a)>(b))?(a):(b))
  #endif
  
@@ -200,6 +200,7 @@ index 780c4b91..28178a83 100644
 +#include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
++#include <time.h>
 +#ifndef strcasecmp
 +#define strcasecmp _stricmp
 +#endif
@@ -253,6 +254,22 @@ index 780c4b91..28178a83 100644
 +}
 +#define asprintf astrometry_asprintf
 +#endif
++#ifndef gmtime_r
++static struct tm* astrometry_gmtime_r(const time_t* t, struct tm* out) {
++    if (!t || !out)
++        return NULL;
++    return (gmtime_s(out, t) == 0) ? out : NULL;
++}
++#define gmtime_r astrometry_gmtime_r
++#endif
++#ifndef localtime_r
++static struct tm* astrometry_localtime_r(const time_t* t, struct tm* out) {
++    if (!t || !out)
++        return NULL;
++    return (localtime_s(out, t) == 0) ? out : NULL;
++}
++#define localtime_r astrometry_localtime_r
++#endif
 +#ifndef M_SQRT2
 +#define M_SQRT2 1.41421356237309504880
 +#endif
@@ -273,7 +290,7 @@ index 780c4b91..28178a83 100644
  // isfinite() on Solaris; from
  // https://code.google.com/p/redis/issues/detail?id=20
  #if defined(__sun) && defined(__GNUC__)
-@@ -52,13 +129,15 @@
+@@ -52,13 +146,15 @@
  
  
  // As suggested in http://gcc.gnu.org/onlinedocs/gcc-4.3.0/gcc/Function-Names.html
@@ -775,10 +792,10 @@ index 00000000..db0c25a0
 +#endif
 diff --git a/include/sys/time.h b/include/sys/time.h
 new file mode 100644
-index 00000000..061df0b6
+index 00000000..6c1a5d60
 --- /dev/null
 +++ b/include/sys/time.h
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,43 @@
 +#ifndef ASTROMETRY_WINDOWS_SYS_TIME_H
 +#define ASTROMETRY_WINDOWS_SYS_TIME_H
 +
@@ -788,18 +805,17 @@ index 00000000..061df0b6
 +
 +#include <stdint.h>
 +#include <time.h>
++#if defined(ERROR)
++#pragma push_macro("ERROR")
++#undef ERROR
++#define ASTROMETRY_RESTORE_ERROR_MACRO 1
++#endif
++#include <winsock2.h>
++#if defined(ASTROMETRY_RESTORE_ERROR_MACRO)
++#pragma pop_macro("ERROR")
++#undef ASTROMETRY_RESTORE_ERROR_MACRO
++#endif
 +#include <sys/timeb.h>
-+
-+#ifndef _TIMEVAL_DEFINED
-+#define _TIMEVAL_DEFINED
-+#ifndef _STRUCT_TIMEVAL
-+#define _STRUCT_TIMEVAL
-+#endif
-+struct timeval {
-+    long tv_sec;
-+    long tv_usec;
-+};
-+#endif
 +
 +struct timezone {
 +    int tz_minuteswest;
@@ -859,10 +875,10 @@ index 00000000..5a6f4b06
 +#endif
 diff --git a/include/unistd.h b/include/unistd.h
 new file mode 100644
-index 00000000..93043f35
+index 00000000..91f686ab
 --- /dev/null
 +++ b/include/unistd.h
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,149 @@
 +#ifndef ASTROMETRY_WINDOWS_UNISTD_H
 +#define ASTROMETRY_WINDOWS_UNISTD_H
 +
@@ -878,6 +894,7 @@ index 00000000..93043f35
 +#include <string.h>
 +#include <sys/stat.h>
 +#include <stdlib.h>
++#include <time.h>
 +
 +#ifndef STDIN_FILENO
 +#define STDIN_FILENO 0
@@ -925,6 +942,25 @@ index 00000000..93043f35
 +#define O_SYNC 0
 +#endif
 +
++#ifndef S_IFMT
++#define S_IFMT _S_IFMT
++#endif
++#ifndef S_IFREG
++#define S_IFREG _S_IFREG
++#endif
++#ifndef S_IFDIR
++#define S_IFDIR _S_IFDIR
++#endif
++#ifndef S_ISREG
++#define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
++#endif
++#ifndef S_ISDIR
++#define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
++#endif
++#ifndef S_ISLNK
++#define S_ISLNK(mode) 0
++#endif
++
 +typedef intptr_t ssize_t;
 +
 +#define access _access
@@ -940,6 +976,9 @@ index 00000000..93043f35
 +#define unlink _unlink
 +#define write _write
 +#define fileno _fileno
++#ifndef mkdir
++#define mkdir(path, mode) _mkdir(path)
++#endif
 +
 +#ifndef fseeko
 +#define fseeko _fseeki64
@@ -956,6 +995,16 @@ index 00000000..93043f35
 +        return -1;
 +    fd = _open(tmpl, _O_CREAT | _O_EXCL | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE);
 +    return fd;
++}
++
++static __inline char* mkdtemp(char* tmpl) {
++    if (!tmpl)
++        return NULL;
++    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0)
++        return NULL;
++    if (_mkdir(tmpl) != 0)
++        return NULL;
++    return tmpl;
 +}
 +
 +/* _sleep is deprecated on MSVC but still the compatible backend here. */
@@ -1804,7 +1853,7 @@ index e7cb3c31..67e044a2 100644
  }
 -
 diff --git a/util/ioutils.c b/util/ioutils.c
-index 3a9bd484..2d3878e8 100644
+index 3a9bd484..6f514429 100644
 --- a/util/ioutils.c
 +++ b/util/ioutils.c
 @@ -391,6 +391,37 @@ static int readfd(int fd, char* buf, int NB, char** pcursor,
@@ -1827,13 +1876,13 @@ index 3a9bd484..2d3878e8 100644
 +        return -1;
 +    }
 +
-+    while (fgets(line, sizeof(line), pipe)) {
-+        size_t n = strlen(line);
-+        while (n && (line[n-1] == '\n' || line[n-1] == '\r'))
-+            line[--n] = '\0';
-+        if (outlines)
-+            sl_append(outlines, line);
-+    }
++        while (fgets(line, sizeof(line), pipe)) {
++            size_t n = strlen(line);
++            while (n && (line[n-1] == '\n' || line[n-1] == '\r'))
++                line[--n] = '\0';
++            if (outlines)
++                sl_append(*outlines, line);
++        }
 +
 +    status = _pclose(pipe);
 +    if (status != 0) {
@@ -1853,6 +1902,30 @@ index 3a9bd484..2d3878e8 100644
  }
  
  int mkdir_p(const char* dirpath) {
+@@ -883,6 +915,7 @@ char* strdup_safe(const char* str) {
+ }
+ 
+ static int oldsigbus_valid = 0;
++#if !defined(_WIN32)
+ static struct sigaction oldsigbus;
+ static void sigbus_handler(int sig) {
+     fprintf(stderr, "\n\n"
+@@ -913,6 +946,15 @@ void reset_sigbus_mmap_warning() {
+         }
+     }
+ }
++#else
++void add_sigbus_mmap_warning() {
++    oldsigbus_valid = 0;
++}
++
++void reset_sigbus_mmap_warning() {
++    oldsigbus_valid = 0;
++}
++#endif
+ 
+ int is_word(const char* cmdline, const char* keyword, char** cptr) {
+     int len = strlen(keyword);
 diff --git a/util/matchfile.c b/util/matchfile.c
 index 816e2235..02826522 100644
 --- a/util/matchfile.c
@@ -1869,7 +1942,7 @@ index 816e2235..02826522 100644
      }
      return list;
 diff --git a/util/qsort_reentrant.c b/util/qsort_reentrant.c
-index 5f244759..ece1e9ff 100644
+index 5f244759..46055c48 100644
 --- a/util/qsort_reentrant.c
 +++ b/util/qsort_reentrant.c
 @@ -28,7 +28,7 @@
@@ -1881,6 +1954,27 @@ index 5f244759..ece1e9ff 100644
  # include <stdio.h>
  #else
  # include <sys/cdefs.h>
+@@ -45,7 +45,7 @@ typedef int             cmp_t(void *, const void *, const void *);
+ static __inline char    *med3(char *, char *, char *, cmp_t *, void *);
+ static __inline void     swapfunc(char *, char *, int, int);
+ 
+-#define min(a, b)       (a) < (b) ? (a) : (b)
++#define QSORT_MIN(a, b) ((a) < (b) ? (a) : (b))
+ 
+ /*
+  * Qsort routine from Bentley & McIlroy's "Engineering a Sort Function".
+@@ -157,9 +157,9 @@ loop:   SWAPINIT(a, es);
+         }
+ 
+         pn = (char *)a + n * es;
+-        r = min(pa - (char *)a, pb - pa);
++        r = QSORT_MIN(pa - (char *)a, pb - pa);
+         vecswap(a, pb - r, r);
+-        r = min(pd - pc, pn - pd - es);
++        r = QSORT_MIN(pd - pc, pn - pd - es);
+         vecswap(pb, pn - r, r);
+         if ((r = pb - pa) > es)
+                 QSORT_R(a, r / es, es, thunk, cmp);
 diff --git a/util/quadfile.c b/util/quadfile.c
 index 9f8f4d52..9b72322f 100644
 --- a/util/quadfile.c
