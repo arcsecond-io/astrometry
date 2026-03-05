@@ -20,10 +20,10 @@ index 194318fe..f8ee27a4 100644
 -
 diff --git a/include/arpa/inet.h b/include/arpa/inet.h
 new file mode 100644
-index 00000000..fb781b8a
+index 00000000..65077622
 --- /dev/null
 +++ b/include/arpa/inet.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,37 @@
 +#ifndef ASTROMETRY_WINDOWS_ARPA_INET_H
 +#define ASTROMETRY_WINDOWS_ARPA_INET_H
 +
@@ -31,8 +31,32 @@ index 00000000..fb781b8a
 +#include_next <arpa/inet.h>
 +#else
 +
-+#include <winsock2.h>
-+#include <ws2tcpip.h>
++#include <stdint.h>
++#include <stdlib.h>
++
++static __inline uint16_t astrometry_bswap16(uint16_t x) {
++    return (uint16_t)((x << 8) | (x >> 8));
++}
++
++static __inline uint32_t astrometry_bswap32(uint32_t x) {
++    return ((x & 0x000000ffU) << 24) |
++           ((x & 0x0000ff00U) << 8)  |
++           ((x & 0x00ff0000U) >> 8)  |
++           ((x & 0xff000000U) >> 24);
++}
++
++#ifndef htons
++#define htons(x) astrometry_bswap16((uint16_t)(x))
++#endif
++#ifndef ntohs
++#define ntohs(x) astrometry_bswap16((uint16_t)(x))
++#endif
++#ifndef htonl
++#define htonl(x) astrometry_bswap32((uint32_t)(x))
++#endif
++#ifndef ntohl
++#define ntohl(x) astrometry_bswap32((uint32_t)(x))
++#endif
 +
 +#endif
 +
@@ -458,10 +482,10 @@ index 00000000..96803fd1
 +#endif
 diff --git a/include/netinet/in.h b/include/netinet/in.h
 new file mode 100644
-index 00000000..edfdf5a2
+index 00000000..176663b7
 --- /dev/null
 +++ b/include/netinet/in.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,16 @@
 +#ifndef ASTROMETRY_WINDOWS_NETINET_IN_H
 +#define ASTROMETRY_WINDOWS_NETINET_IN_H
 +
@@ -469,8 +493,11 @@ index 00000000..edfdf5a2
 +#include_next <netinet/in.h>
 +#else
 +
-+#include <winsock2.h>
-+#include <ws2tcpip.h>
++#include <stdint.h>
++#include <arpa/inet.h>
++
++typedef uint16_t in_port_t;
++typedef uint32_t in_addr_t;
 +
 +#endif
 +
@@ -774,7 +801,7 @@ index 00000000..16ed3e57
 +#endif
 diff --git a/include/sys/select.h b/include/sys/select.h
 new file mode 100644
-index 00000000..db0c25a0
+index 00000000..1005a0bf
 --- /dev/null
 +++ b/include/sys/select.h
 @@ -0,0 +1,12 @@
@@ -785,17 +812,17 @@ index 00000000..db0c25a0
 +#include_next <sys/select.h>
 +#else
 +
-+#include <winsock2.h>
++#include <sys/time.h>
 +
 +#endif
 +
 +#endif
 diff --git a/include/sys/time.h b/include/sys/time.h
 new file mode 100644
-index 00000000..6c1a5d60
+index 00000000..061df0b6
 --- /dev/null
 +++ b/include/sys/time.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,44 @@
 +#ifndef ASTROMETRY_WINDOWS_SYS_TIME_H
 +#define ASTROMETRY_WINDOWS_SYS_TIME_H
 +
@@ -805,17 +832,18 @@ index 00000000..6c1a5d60
 +
 +#include <stdint.h>
 +#include <time.h>
-+#if defined(ERROR)
-+#pragma push_macro("ERROR")
-+#undef ERROR
-+#define ASTROMETRY_RESTORE_ERROR_MACRO 1
-+#endif
-+#include <winsock2.h>
-+#if defined(ASTROMETRY_RESTORE_ERROR_MACRO)
-+#pragma pop_macro("ERROR")
-+#undef ASTROMETRY_RESTORE_ERROR_MACRO
-+#endif
 +#include <sys/timeb.h>
++
++#ifndef _TIMEVAL_DEFINED
++#define _TIMEVAL_DEFINED
++#ifndef _STRUCT_TIMEVAL
++#define _STRUCT_TIMEVAL
++#endif
++struct timeval {
++    long tv_sec;
++    long tv_usec;
++};
++#endif
 +
 +struct timezone {
 +    int tz_minuteswest;
