@@ -142,10 +142,10 @@ index 0135151a..7988dfe1 100644
  
  /**
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
-index 780c4b91..c54a294b 100644
+index 780c4b91..d13c784e 100644
 --- a/include/astrometry/os-features.h
 +++ b/include/astrometry/os-features.h
-@@ -18,6 +18,19 @@
+@@ -18,6 +18,25 @@
  #define	MAX(a,b) (((a)>(b))?(a):(b))
  #endif
  
@@ -160,12 +160,18 @@ index 780c4b91..c54a294b 100644
 +#ifndef strdup
 +#define strdup _strdup
 +#endif
++#ifndef M_SQRT2
++#define M_SQRT2 1.41421356237309504880
++#endif
++#ifndef M_SQRT1_2
++#define M_SQRT1_2 0.70710678118654752440
++#endif
 +#endif
 +
  // isfinite() on Solaris; from
  // https://code.google.com/p/redis/issues/detail?id=20
  #if defined(__sun) && defined(__GNUC__)
-@@ -52,13 +65,15 @@
+@@ -52,13 +71,15 @@
  
  
  // As suggested in http://gcc.gnu.org/onlinedocs/gcc-4.3.0/gcc/Function-Names.html
@@ -1067,7 +1073,7 @@ index 1bb68ad5..d5dd4cb6 100644
          solver_clear_indexes(solver);
  
 diff --git a/solver/solver.c b/solver/solver.c
-index fe1c66d0..bb031988 100644
+index fe1c66d0..12bf1ccd 100644
 --- a/solver/solver.c
 +++ b/solver/solver.c
 @@ -180,6 +180,10 @@ void solver_tweak2(solver_t* sp, MatchObj* mo, int order, sip_t* verifysip) {
@@ -1099,7 +1105,65 @@ index fe1c66d0..bb031988 100644
  }
  
  static void get_field_center(solver_t* s, double* cx, double* cy) {
-@@ -1355,11 +1364,16 @@ static void resolve_matches(kdtree_qres_t* krez, const double *field_xy,
+@@ -771,6 +780,8 @@ void solver_run(solver_t* solver) {
+     time_t next_timer_callback_time = time(NULL) + 1;
+     pquad* pquads;
+     size_t i, num_indexes;
++    double* minAB2s = NULL;
++    double* maxAB2s = NULL;
+     double tol2;
+     int field[DQMAX];
+ 
+@@ -795,10 +806,18 @@ void solver_run(solver_t* solver) {
+ 
+     num_indexes = pl_size(solver->indexes);
+     {
+-        double minAB2s[num_indexes];
+-        double maxAB2s[num_indexes];
+         solver->minminAB2 = LARGE_VAL;
+         solver->maxmaxAB2 = -LARGE_VAL;
++        if (num_indexes) {
++            minAB2s = calloc(num_indexes, sizeof(double));
++            maxAB2s = calloc(num_indexes, sizeof(double));
++            if (!minAB2s || !maxAB2s) {
++                ERROR("Failed to allocate index scale bounds arrays");
++                free(minAB2s);
++                free(maxAB2s);
++                return;
++            }
++        }
+         for (i = 0; i < num_indexes; i++) {
+             double minAB=0, maxAB=0;
+             index_t* index = pl_get(solver->indexes, i);
+@@ -1034,6 +1053,8 @@ void solver_run(solver_t* solver) {
+         }
+ 
+     quitnow:
++        free(minAB2s);
++        free(maxAB2s);
+         for (i = 0; i < (numxy*numxy); i++) {
+             pquad* pq = pquads + i;
+             free(pq->inbox);
+@@ -1269,12 +1290,16 @@ static void resolve_matches(kdtree_qres_t* krez, const double *field_xy,
+     //    [x_A,y_A, x_B,y_B, x_C,y_C, ...]
+     int jj, thisquadno;
+     MatchObj mo;
+-    unsigned int star[dimquads];
++    unsigned int star[DQMAX];
+ 
+     assert(krez);
++    if (dimquads > DQMAX) {
++        ERROR("resolve_matches: dimquads %i exceeds DQMAX %i", dimquads, DQMAX);
++        return;
++    }
+ 
+     for (jj = 0; jj < krez->nres; jj++) {
+-        double starxyz[dimquads*3];
++        double starxyz[DQMAX*3];
+         double scale;
+         double arcsecperpix;
+         tan_t wcs;
+@@ -1355,11 +1380,16 @@ static void resolve_matches(kdtree_qres_t* krez, const double *field_xy,
  
          set_center_and_radius(solver, &mo, &(mo.wcstan), NULL);
  
@@ -1118,7 +1182,7 @@ index fe1c66d0..bb031988 100644
      }
  }
  
-@@ -1409,6 +1423,7 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
+@@ -1409,6 +1439,7 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
          // Since we tuned up this solution, we can't just accept the
          // resulting log-odds at face value.
          if (!fake_match) {
@@ -1126,7 +1190,7 @@ index fe1c66d0..bb031988 100644
              verify_hit(sp->index->starkd, sp->index->cutnside,
                         mo, mo->sip, sp->vf, match_distance_in_pixels2,
                         sp->distractor_ratio,
-@@ -1423,8 +1438,10 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
+@@ -1423,8 +1454,10 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
          }
      }
  
@@ -1138,7 +1202,7 @@ index fe1c66d0..bb031988 100644
  
      // Also copy original field star coordinates
      //mo.quadpix_orig
-@@ -1444,8 +1461,10 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
+@@ -1444,8 +1477,10 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
  
      matchobj_print(mo, log_get_level());
  
@@ -1150,7 +1214,7 @@ index fe1c66d0..bb031988 100644
  
      logverb("Pixel scale: %g arcsec/pix.\n", mo->scale);
      logverb("Parity: %s.\n", (mo->parity ? "neg" : "pos"));
-@@ -1638,9 +1657,19 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
+@@ -1638,9 +1673,19 @@ static int solver_handle_hit(solver_t* sp, MatchObj* mo, sip_t* verifysip,
  
      // New best match?
      if (!sp->have_best_match || (mo->logodds > sp->best_match.logodds)) {
@@ -1375,6 +1439,47 @@ index 2b6323bb..26061844 100644
              bl_append(foundquads, &fq);
          }
  
+diff --git a/util/fitsbin.c b/util/fitsbin.c
+index e18e0ca8..9c3a7ada 100644
+--- a/util/fitsbin.c
++++ b/util/fitsbin.c
+@@ -5,6 +5,7 @@
+ 
+ #include <stdarg.h>
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <sys/types.h>
+ #include <sys/mman.h>
+ #include <string.h>
+@@ -263,9 +264,14 @@ static int write_chunk(fitsbin_t* fb, fitsbin_chunk_t* chunk, int flipped) {
+ 
+         int i, j;
+         int nper = chunk->itemsize / flipped;
+-        char tempdata[chunk->itemsize];
++        char* tempdata;
+         assert(chunk->itemsize >= flipped);
+         assert(nper * flipped == chunk->itemsize);
++        tempdata = malloc((size_t)chunk->itemsize);
++        if (!tempdata) {
++            ERROR("Failed to allocate %i-byte temporary FITS chunk buffer", chunk->itemsize);
++            return -1;
++        }
+         for (i=0; i<N; i++) {
+             // copy it...
+             memcpy(tempdata, chunk->data + i*chunk->itemsize, chunk->itemsize);
+@@ -275,6 +281,7 @@ static int write_chunk(fitsbin_t* fb, fitsbin_chunk_t* chunk, int flipped) {
+             // write it...
+             fitsbin_write_item(fb, chunk, tempdata);
+         }
++        free(tempdata);
+     }
+     chunk->nrows -= N;
+     if (fitsbin_fix_chunk_header(fb, chunk)) {
+@@ -619,4 +626,3 @@ fitsbin_t* fitsbin_open_for_writing(const char* fn) {
+     }
+     return fb;
+ }
+-
 diff --git a/util/ioutils.c b/util/ioutils.c
 index 3a9bd484..2d3878e8 100644
 --- a/util/ioutils.c
@@ -1440,3 +1545,51 @@ index 816e2235..02826522 100644
          pl_append(list, copy);
      }
      return list;
+diff --git a/util/quadfile.c b/util/quadfile.c
+index 9f8f4d52..5ae40f37 100644
+--- a/util/quadfile.c
++++ b/util/quadfile.c
+@@ -5,6 +5,7 @@
+ 
+ #include <stdio.h>
+ #include <math.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <assert.h>
+ 
+@@ -280,21 +281,28 @@ int quadfile_write_header_to(quadfile_t* qf, FILE* fid) {
+ 
+ int quadfile_write_quad(quadfile_t* qf, unsigned int* stars) {
+     uint32_t* data;
+-    uint32_t ustars[qf->dimquads];
++    uint32_t* ustars = NULL;
+     int i;
+     fitsbin_chunk_t* chunk = quads_chunk(qf);
+ 
+     if (sizeof(uint32_t) == sizeof(uint)) {
+         data = stars;
+     } else {
++        ustars = malloc((size_t)qf->dimquads * sizeof(uint32_t));
++        if (!ustars) {
++            ERROR("Failed to allocate temporary quad buffer");
++            return -1;
++        }
+         data = ustars;
+         for (i=0; i<qf->dimquads; i++)
+             ustars[i] = stars[i];
+     }
+     if (fitsbin_write_item(qf->fb, chunk, data)) {
++        free(ustars);
+         ERROR("Failed to write a quad");
+         return -1;
+     }
++    free(ustars);
+     qf->numquads++;
+     return 0;
+ }
+@@ -349,5 +357,3 @@ int quadfile_get_stars(const quadfile_t* qf, unsigned int quadid, unsigned int*
+     return 0;
+ }
+ 
+-
+-
