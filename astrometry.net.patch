@@ -1534,10 +1534,10 @@ index 63f14adf..903e8523 100644
  } \
  } while(0)
 diff --git a/util/fitsbin.c b/util/fitsbin.c
-index e18e0ca8..9c3a7ada 100644
+index e18e0ca8..da069df4 100644
 --- a/util/fitsbin.c
 +++ b/util/fitsbin.c
-@@ -5,6 +5,7 @@
+@@ -5,11 +5,13 @@
  
  #include <stdarg.h>
  #include <stdio.h>
@@ -1545,7 +1545,13 @@ index e18e0ca8..9c3a7ada 100644
  #include <sys/types.h>
  #include <sys/mman.h>
  #include <string.h>
-@@ -263,9 +264,14 @@ static int write_chunk(fitsbin_t* fb, fitsbin_chunk_t* chunk, int flipped) {
+ #include <assert.h>
+ 
++#include "os-features.h"
+ #include "keywords.h"
+ #include "fitsbin.h"
+ #include "fitsioutils.h"
+@@ -263,18 +265,26 @@ static int write_chunk(fitsbin_t* fb, fitsbin_chunk_t* chunk, int flipped) {
  
          int i, j;
          int nper = chunk->itemsize / flipped;
@@ -1560,8 +1566,13 @@ index e18e0ca8..9c3a7ada 100644
 +        }
          for (i=0; i<N; i++) {
              // copy it...
-             memcpy(tempdata, chunk->data + i*chunk->itemsize, chunk->itemsize);
-@@ -275,6 +281,7 @@ static int write_chunk(fitsbin_t* fb, fitsbin_chunk_t* chunk, int flipped) {
+-            memcpy(tempdata, chunk->data + i*chunk->itemsize, chunk->itemsize);
++            memcpy(tempdata,
++                   ((const char*)chunk->data) + ((size_t)i * (size_t)chunk->itemsize),
++                   (size_t)chunk->itemsize);
+             // swap it...
+             for (j=0; j<nper; j++)
+                 endian_swap(tempdata + j*flipped, flipped);
              // write it...
              fitsbin_write_item(fb, chunk, tempdata);
          }
@@ -1569,7 +1580,7 @@ index e18e0ca8..9c3a7ada 100644
      }
      chunk->nrows -= N;
      if (fitsbin_fix_chunk_header(fb, chunk)) {
-@@ -619,4 +626,3 @@ fitsbin_t* fitsbin_open_for_writing(const char* fn) {
+@@ -619,4 +629,3 @@ fitsbin_t* fitsbin_open_for_writing(const char* fn) {
      }
      return fb;
  }
