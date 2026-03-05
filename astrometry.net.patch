@@ -183,14 +183,18 @@ index 0135151a..01f8a9d0 100644
  int log_get_level(void);
  
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
-index 780c4b91..2861af4c 100644
+index 780c4b91..cad82f8f 100644
 --- a/include/astrometry/os-features.h
 +++ b/include/astrometry/os-features.h
-@@ -18,6 +18,34 @@
+@@ -18,6 +18,82 @@
  #define	MAX(a,b) (((a)>(b))?(a):(b))
  #endif
  
 +#if defined(_WIN32)
++#include <errno.h>
++#include <stdarg.h>
++#include <stdio.h>
++#include <stdlib.h>
 +#include <string.h>
 +#ifndef strcasecmp
 +#define strcasecmp _stricmp
@@ -200,6 +204,50 @@ index 780c4b91..2861af4c 100644
 +#endif
 +#ifndef strdup
 +#define strdup _strdup
++#endif
++#ifndef va_copy
++#define va_copy(dst, src) ((dst) = (src))
++#endif
++#ifndef vasprintf
++static int astrometry_vasprintf(char** strp, const char* fmt, va_list ap) {
++    va_list ap_copy;
++    char* buf;
++    int n;
++    if (!strp || !fmt) {
++        errno = EINVAL;
++        return -1;
++    }
++    va_copy(ap_copy, ap);
++#if defined(_MSC_VER)
++    n = _vscprintf(fmt, ap_copy);
++#else
++    n = vsnprintf(NULL, 0, fmt, ap_copy);
++#endif
++    va_end(ap_copy);
++    if (n < 0)
++        return -1;
++    buf = malloc((size_t)n + 1U);
++    if (!buf)
++        return -1;
++    if (vsnprintf(buf, (size_t)n + 1U, fmt, ap) < 0) {
++        free(buf);
++        return -1;
++    }
++    *strp = buf;
++    return n;
++}
++#define vasprintf astrometry_vasprintf
++#endif
++#ifndef asprintf
++static int astrometry_asprintf(char** strp, const char* fmt, ...) {
++    int n;
++    va_list ap;
++    va_start(ap, fmt);
++    n = vasprintf(strp, fmt, ap);
++    va_end(ap);
++    return n;
++}
++#define asprintf astrometry_asprintf
 +#endif
 +#ifndef M_SQRT2
 +#define M_SQRT2 1.41421356237309504880
@@ -221,7 +269,7 @@ index 780c4b91..2861af4c 100644
  // isfinite() on Solaris; from
  // https://code.google.com/p/redis/issues/detail?id=20
  #if defined(__sun) && defined(__GNUC__)
-@@ -52,13 +80,15 @@
+@@ -52,13 +128,15 @@
  
  
  // As suggested in http://gcc.gnu.org/onlinedocs/gcc-4.3.0/gcc/Function-Names.html
@@ -1480,10 +1528,18 @@ index ebced604..8f15afab 100644
  }
 -
 diff --git a/solver/verify2.c b/solver/verify2.c
-index 4395f25b..76ff87a7 100644
+index 4395f25b..04dc0b46 100644
 --- a/solver/verify2.c
 +++ b/solver/verify2.c
-@@ -18,9 +18,9 @@
+@@ -8,6 +8,7 @@
+ #include <string.h>
+ #include <stdint.h>
+ 
++#include "os-features.h"
+ #include "verify2.h"
+ #include "permutedsort.h"
+ #include "mathutil.h"
+@@ -18,9 +19,9 @@
  
  #define DEBUGVERIFY 1
  #if DEBUGVERIFY
@@ -1495,10 +1551,11 @@ index 4395f25b..76ff87a7 100644
  #endif
  
  #include "fitsioutils.h"
-@@ -398,4 +398,3 @@ void verify_get_all_matches(const double* refxys, int NR,
+@@ -397,5 +398,3 @@ void verify_get_all_matches(const double* refxys, int NR,
  
  
  
+-
 -
 diff --git a/solver/whynot.c b/solver/whynot.c
 index 2b6323bb..26061844 100644
@@ -1515,6 +1572,23 @@ index 2b6323bb..26061844 100644
              bl_append(foundquads, &fq);
          }
  
+diff --git a/util/bl.c b/util/bl.c
+index 5e009cac..4e94dc68 100644
+--- a/util/bl.c
++++ b/util/bl.c
+@@ -9,6 +9,7 @@
+ #include <stdarg.h>
+ #include <assert.h>
+ 
++#include "os-features.h"
+ #include "bl.h"
+ 
+ #include "keywords.h"
+@@ -1257,4 +1258,3 @@ char* sl_insert_sorted(sl* list, const char* string) {
+ #define InlineDefine InlineDefineC
+ #include "bl.inc"
+ #undef InlineDefine
+-
 diff --git a/util/cfitsutils.h b/util/cfitsutils.h
 index 63f14adf..903e8523 100644
 --- a/util/cfitsutils.h
@@ -1533,6 +1607,23 @@ index 63f14adf..903e8523 100644
  goto bailout; \
  } \
  } while(0)
+diff --git a/util/errors.c b/util/errors.c
+index 703a7073..4b124801 100644
+--- a/util/errors.c
++++ b/util/errors.c
+@@ -8,6 +8,7 @@
+ #include <errno.h>
+ #include <stdio.h>
+ 
++#include "os-features.h"
+ #include "errors.h"
+ #include "ioutils.h"
+ #include "an-bool.h"
+@@ -264,4 +265,3 @@ void error_stack_clear(err_t* e) {
+     }
+     bl_remove_all(e->errstack);
+ }
+-
 diff --git a/util/fitsbin.c b/util/fitsbin.c
 index e18e0ca8..da069df4 100644
 --- a/util/fitsbin.c
@@ -1585,6 +1676,108 @@ index e18e0ca8..da069df4 100644
      return fb;
  }
 -
+diff --git a/util/fitsioutils.c b/util/fitsioutils.c
+index 8b9c3abe..ecf067e5 100644
+--- a/util/fitsioutils.c
++++ b/util/fitsioutils.c
+@@ -82,7 +82,8 @@ qfits_table* fits_copy_table(qfits_table* tbl) {
+ 
+ int fits_pixdump(const qfitsdumper * qd) {
+     FILE* f_out;
+-    const void* vbuf;
++    const void* srcbuf;
++    const unsigned char* vbuf;
+     anbool tostdout;
+     int i;
+     int isize;
+@@ -96,16 +97,16 @@ int fits_pixdump(const qfitsdumper * qd) {
+     }
+ 
+     // accept
+-    vbuf = qd->vbuf;
++    srcbuf = qd->vbuf;
+     switch (qd->ptype) {
+     case PTYPE_FLOAT:
+-        if (!vbuf) vbuf = qd->fbuf;
++        if (!srcbuf) srcbuf = qd->fbuf;
+         break;
+     case PTYPE_INT:
+-        if (!vbuf) vbuf = qd->ibuf;
++        if (!srcbuf) srcbuf = qd->ibuf;
+         break;
+     case PTYPE_DOUBLE:
+-        if (!vbuf) vbuf = qd->dbuf;
++        if (!srcbuf) srcbuf = qd->dbuf;
+         break;
+     case PTYPE_UINT8:
+     case PTYPE_INT16:
+@@ -116,10 +117,11 @@ int fits_pixdump(const qfitsdumper * qd) {
+         return -1;
+     }
+ 
+-    if (!vbuf) {
++    if (!srcbuf) {
+         ERROR("No pixel buffer supplied");
+         return -1;
+     }
++    vbuf = (const unsigned char*)srcbuf;
+ 
+     tostdout = streq(qd->filename, "STDOUT");
+     if (tostdout)
+@@ -145,7 +147,7 @@ int fits_pixdump(const qfitsdumper * qd) {
+             SYSERROR("Failed to write FITS pixel value to file \"%s\"", qd->filename);
+             return -1;
+         }
+-        vbuf += isize;
++        vbuf += (size_t)isize;
+     }
+ 
+     if (!tostdout)
+@@ -1054,7 +1056,9 @@ static void fits_init_endian_string() {
+         uint32_t endian = ENDIAN_DETECTOR;
+         unsigned char* cptr = (unsigned char*)&endian;
+         fits_endian_string_inited = 1;
+-        sprintf(fits_endian_string, "%02x:%02x:%02x:%02x", (uint)cptr[0], (uint)cptr[1], (uint)cptr[2], (uint)cptr[3]);
++        sprintf(fits_endian_string, "%02x:%02x:%02x:%02x",
++                (unsigned int)cptr[0], (unsigned int)cptr[1],
++                (unsigned int)cptr[2], (unsigned int)cptr[3]);
+     }
+ }
+ 
+@@ -1174,7 +1178,7 @@ int fits_find_column(const qfits_table* table, const char* colname) {
+ }
+ 
+ void fits_add_uint_size(qfits_header* header) {
+-    fits_header_add_int(header, "UINT_SZ", sizeof(uint), "sizeof(uint)");
++    fits_header_add_int(header, "UINT_SZ", sizeof(unsigned int), "sizeof(unsigned int)");
+ }
+ 
+ void fits_add_double_size(qfits_header* header) {
+@@ -1184,9 +1188,9 @@ void fits_add_double_size(qfits_header* header) {
+ int fits_check_uint_size(const qfits_header* header) {
+     int uintsz;
+     uintsz = qfits_header_getint(header, "UINT_SZ", -1);
+-    if (sizeof(uint) != uintsz) {
+-        fprintf(stderr, "File was written with sizeof(uint)=%i, but currently sizeof(uint)=%u.\n",
+-                uintsz, (uint)sizeof(uint));
++    if (sizeof(unsigned int) != (size_t)uintsz) {
++        fprintf(stderr, "File was written with sizeof(unsigned int)=%i, but currently sizeof(unsigned int)=%u.\n",
++                uintsz, (unsigned int)sizeof(unsigned int));
+         return -1;
+     }
+     return 0;
+@@ -1195,9 +1199,9 @@ int fits_check_uint_size(const qfits_header* header) {
+ int fits_check_double_size(const qfits_header* header) {
+     int doublesz;
+     doublesz = qfits_header_getint(header, "DUBL_SZ", -1);
+-    if (sizeof(double) != doublesz) {
++    if (sizeof(double) != (size_t)doublesz) {
+         fprintf(stderr, "File was written with sizeof(double)=%i, but currently sizeof(double)=%u.\n",
+-                doublesz, (uint)sizeof(double));
++                doublesz, (unsigned int)sizeof(double));
+         return -1;
+     }
+     return 0;
 diff --git a/util/ioutils.c b/util/ioutils.c
 index 3a9bd484..2d3878e8 100644
 --- a/util/ioutils.c
@@ -1651,7 +1844,7 @@ index 816e2235..02826522 100644
      }
      return list;
 diff --git a/util/quadfile.c b/util/quadfile.c
-index 9f8f4d52..5ae40f37 100644
+index 9f8f4d52..9b72322f 100644
 --- a/util/quadfile.c
 +++ b/util/quadfile.c
 @@ -5,6 +5,7 @@
@@ -1671,7 +1864,8 @@ index 9f8f4d52..5ae40f37 100644
      int i;
      fitsbin_chunk_t* chunk = quads_chunk(qf);
  
-     if (sizeof(uint32_t) == sizeof(uint)) {
+-    if (sizeof(uint32_t) == sizeof(uint)) {
++    if (sizeof(uint32_t) == sizeof(unsigned int)) {
          data = stars;
      } else {
 +        ustars = malloc((size_t)qf->dimquads * sizeof(uint32_t));
@@ -1692,9 +1886,10 @@ index 9f8f4d52..5ae40f37 100644
      qf->numquads++;
      return 0;
  }
-@@ -349,5 +357,3 @@ int quadfile_get_stars(const quadfile_t* qf, unsigned int quadid, unsigned int*
+@@ -348,6 +356,3 @@ int quadfile_get_stars(const quadfile_t* qf, unsigned int quadid, unsigned int*
+     }
      return 0;
  }
- 
+-
 -
 -
