@@ -183,15 +183,16 @@ index 0135151a..01f8a9d0 100644
  int log_get_level(void);
  
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
-index 780c4b91..cad82f8f 100644
+index 780c4b91..28178a83 100644
 --- a/include/astrometry/os-features.h
 +++ b/include/astrometry/os-features.h
-@@ -18,6 +18,82 @@
+@@ -18,6 +18,83 @@
  #define	MAX(a,b) (((a)>(b))?(a):(b))
  #endif
  
 +#if defined(_WIN32)
 +#include <errno.h>
++#include <math.h>
 +#include <stdarg.h>
 +#include <stdio.h>
 +#include <stdlib.h>
@@ -269,7 +270,7 @@ index 780c4b91..cad82f8f 100644
  // isfinite() on Solaris; from
  // https://code.google.com/p/redis/issues/detail?id=20
  #if defined(__sun) && defined(__GNUC__)
-@@ -52,13 +128,15 @@
+@@ -52,13 +129,15 @@
  
  
  // As suggested in http://gcc.gnu.org/onlinedocs/gcc-4.3.0/gcc/Function-Names.html
@@ -1778,6 +1779,24 @@ index 8b9c3abe..ecf067e5 100644
          return -1;
      }
      return 0;
+diff --git a/util/fitstable.c b/util/fitstable.c
+index e7cb3c31..67e044a2 100644
+--- a/util/fitstable.c
++++ b/util/fitstable.c
+@@ -698,7 +698,7 @@ static int write_one(fitstable_t* table, const void* struc, anbool flip,
+         col = getcol(table, i);
+         if (col->in_struct) {
+             if (struc)
+-                columndata = struc + col->coffset;
++                columndata = ((const char*)struc) + col->coffset;
+             else
+                 columndata = NULL;
+         } else {
+@@ -1656,4 +1656,3 @@ int fitstable_pushback(fitstable_t* tab) {
+     buffered_read_pushback(tab->br);
+     return 0;
+ }
+-
 diff --git a/util/ioutils.c b/util/ioutils.c
 index 3a9bd484..2d3878e8 100644
 --- a/util/ioutils.c
