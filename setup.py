@@ -1,5 +1,6 @@
 import pathlib
 import platform
+import subprocess
 
 import setuptools
 import setuptools.command.build_py
@@ -8,12 +9,64 @@ import setuptools.extension
 extra_compile_args = [] # DEBUG: ["-g", "-O0"], REL: []
 extra_link_args = []
 define_macros = []
+libraries = []
 include_dirs = [
     "astrometry.net/gsl-an",
     "astrometry.net/include",
     "astrometry.net/include/astrometry",
     "astrometry.net/util",
 ]
+
+
+def _run_git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+
+def ensure_astrometry_net_sources() -> None:
+    astrometry_net = pathlib.Path("astrometry.net")
+    has_sources = (
+        (astrometry_net / "gsl-an").exists()
+        and (astrometry_net / "include" / "astrometry" / "os-features.h").exists()
+    )
+
+    if not has_sources:
+        res = _run_git("submodule", "update", "--init", "--recursive")
+        if res.returncode != 0:
+            raise RuntimeError(
+                "Failed to fetch astrometry.net submodule:\n"
+                f"{res.stderr or res.stdout}"
+            )
+
+    patch_file = pathlib.Path("astrometry.net.patch")
+    patch_marker = astrometry_net / "include" / "unistd.h"
+    if patch_file.exists() and not patch_marker.exists():
+        check = _run_git("-C", "astrometry.net", "apply", "--check", "../astrometry.net.patch")
+        if check.returncode == 0:
+            apply_res = _run_git("-C", "astrometry.net", "apply", "../astrometry.net.patch")
+            if apply_res.returncode != 0:
+                raise RuntimeError(
+                    "Failed to apply astrometry.net.patch:\n"
+                    f"{apply_res.stderr or apply_res.stdout}"
+                )
+        else:
+            # Already applied?
+            reverse = _run_git(
+                "-C", "astrometry.net", "apply", "--reverse", "--check", "../astrometry.net.patch"
+            )
+            if reverse.returncode != 0:
+                raise RuntimeError(
+                    "astrometry.net sources do not match astrometry.net.patch:\n"
+                    f"{check.stderr or check.stdout}"
+                )
+
+
+ensure_astrometry_net_sources()
+
 sources = [
     # gsl
     "astrometry.net/gsl-an/blas/blas.c",
@@ -114,6 +167,13 @@ sources = [
 compiler = platform.python_compiler()
 if compiler.startswith("Clang") or compiler.startswith("GCC"):
     extra_compile_args += ["-Wno-sign-compare"]
+
+if platform.system() == "Windows":
+    define_macros += [
+        ("_CRT_SECURE_NO_WARNINGS", "1"),
+        ("_CRT_NONSTDC_NO_WARNINGS", "1"),
+    ]
+    libraries += ["ws2_32"]
 
 
 class BuildCommand(setuptools.command.build_py.build_py):
@@ -248,7 +308,7 @@ setuptools.setup(
             language="c",
             sources=sources,
             include_dirs=include_dirs,
-            libraries=[],
+            libraries=libraries,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
             define_macros=define_macros,
