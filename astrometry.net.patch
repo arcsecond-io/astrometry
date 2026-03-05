@@ -120,10 +120,10 @@ index 780c4b91..c54a294b 100644
  /**
 diff --git a/include/dirent.h b/include/dirent.h
 new file mode 100644
-index 00000000..fffb91c3
+index 00000000..01088765
 --- /dev/null
 +++ b/include/dirent.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,90 @@
 +#ifndef ASTROMETRY_WINDOWS_DIRENT_H
 +#define ASTROMETRY_WINDOWS_DIRENT_H
 +
@@ -132,17 +132,22 @@ index 00000000..fffb91c3
 +#else
 +
 +#include <errno.h>
++#include <io.h>
++#include <stdint.h>
 +#include <stdlib.h>
 +#include <string.h>
-+#include <windows.h>
++
++#ifndef MAX_PATH
++#define MAX_PATH 260
++#endif
 +
 +struct dirent {
 +    char d_name[MAX_PATH + 1];
 +};
 +
 +typedef struct {
-+    HANDLE handle;
-+    WIN32_FIND_DATAA data;
++    intptr_t handle;
++    struct _finddata_t data;
 +    struct dirent ent;
 +    char pattern[MAX_PATH + 4];
 +    int first;
@@ -173,8 +178,8 @@ index 00000000..fffb91c3
 +        strcat(dir->pattern, "\\");
 +    strcat(dir->pattern, "*");
 +
-+    dir->handle = FindFirstFileA(dir->pattern, &dir->data);
-+    if (dir->handle == INVALID_HANDLE_VALUE) {
++    dir->handle = _findfirst(dir->pattern, &dir->data);
++    if (dir->handle == -1L) {
 +        free(dir);
 +        return NULL;
 +    }
@@ -188,11 +193,11 @@ index 00000000..fffb91c3
 +
 +    if (dir->first) {
 +        dir->first = 0;
-+    } else if (!FindNextFileA(dir->handle, &dir->data)) {
++    } else if (_findnext(dir->handle, &dir->data) != 0) {
 +        return NULL;
 +    }
 +
-+    strncpy(dir->ent.d_name, dir->data.cFileName, MAX_PATH);
++    strncpy(dir->ent.d_name, dir->data.name, MAX_PATH);
 +    dir->ent.d_name[MAX_PATH] = '\0';
 +    return &dir->ent;
 +}
@@ -200,8 +205,8 @@ index 00000000..fffb91c3
 +static __inline int closedir(DIR* dir) {
 +    if (!dir)
 +        return -1;
-+    if (dir->handle != INVALID_HANDLE_VALUE)
-+        FindClose(dir->handle);
++    if (dir->handle != -1L)
++        _findclose(dir->handle);
 +    free(dir);
 +    return 0;
 +}
@@ -504,10 +509,10 @@ index 00000000..dcf4c9b2
 +#endif
 diff --git a/include/sys/resource.h b/include/sys/resource.h
 new file mode 100644
-index 00000000..3876d267
+index 00000000..16ed3e57
 --- /dev/null
 +++ b/include/sys/resource.h
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,69 @@
 +#ifndef ASTROMETRY_WINDOWS_SYS_RESOURCE_H
 +#define ASTROMETRY_WINDOWS_SYS_RESOURCE_H
 +
@@ -516,8 +521,8 @@ index 00000000..3876d267
 +#else
 +
 +#include <stdint.h>
-+#include <windows.h>
 +#include <sys/time.h>
++#include <time.h>
 +
 +#define RUSAGE_SELF 0
 +
@@ -537,29 +542,21 @@ index 00000000..3876d267
 +    long ru_maxrss;
 +};
 +
-+static __inline void astrometry_filetime_to_timeval(const FILETIME* ft, struct timeval* tv) {
-+    ULARGE_INTEGER uli;
-+    uint64_t usec;
-+
-+    uli.LowPart = ft->dwLowDateTime;
-+    uli.HighPart = ft->dwHighDateTime;
-+    usec = uli.QuadPart / 10ULL;
-+    tv->tv_sec = (long)(usec / 1000000ULL);
-+    tv->tv_usec = (long)(usec % 1000000ULL);
-+}
-+
 +static __inline int getrusage(int who, struct rusage* usage) {
-+    FILETIME create_time, exit_time, kernel_time, user_time;
++    clock_t ticks;
 +
 +    if (!usage || who != RUSAGE_SELF)
 +        return -1;
 +
-+    usage->ru_maxrss = 0;
-+    if (!GetProcessTimes(GetCurrentProcess(), &create_time, &exit_time, &kernel_time, &user_time))
++    ticks = clock();
++    if (ticks == (clock_t)-1)
 +        return -1;
 +
-+    astrometry_filetime_to_timeval(&user_time, &usage->ru_utime);
-+    astrometry_filetime_to_timeval(&kernel_time, &usage->ru_stime);
++    usage->ru_maxrss = 0;
++    usage->ru_utime.tv_sec = (long)(ticks / CLOCKS_PER_SEC);
++    usage->ru_utime.tv_usec = (long)((ticks % CLOCKS_PER_SEC) * 1000000L / CLOCKS_PER_SEC);
++    usage->ru_stime.tv_sec = 0;
++    usage->ru_stime.tv_usec = 0;
 +    return 0;
 +}
 +
@@ -579,9 +576,7 @@ index 00000000..3876d267
 +}
 +
 +static __inline int getpagesize(void) {
-+    SYSTEM_INFO info;
-+    GetSystemInfo(&info);
-+    return (int)info.dwPageSize;
++    return 4096;
 +}
 +
 +#endif
@@ -607,10 +602,10 @@ index 00000000..db0c25a0
 +#endif
 diff --git a/include/sys/time.h b/include/sys/time.h
 new file mode 100644
-index 00000000..f754216a
+index 00000000..6c252b13
 --- /dev/null
 +++ b/include/sys/time.h
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,41 @@
 +#ifndef ASTROMETRY_WINDOWS_SYS_TIME_H
 +#define ASTROMETRY_WINDOWS_SYS_TIME_H
 +
@@ -620,7 +615,7 @@ index 00000000..f754216a
 +
 +#include <stdint.h>
 +#include <time.h>
-+#include <windows.h>
++#include <sys/timeb.h>
 +
 +#ifndef _TIMEVAL_DEFINED
 +#define _TIMEVAL_DEFINED
@@ -636,22 +631,16 @@ index 00000000..f754216a
 +};
 +
 +static __inline int gettimeofday(struct timeval* tv, struct timezone* tz) {
-+    FILETIME ft;
-+    ULARGE_INTEGER uli;
-+    uint64_t usec;
++    struct __timeb64 tb;
 +
 +    (void)tz;
 +    if (!tv)
 +        return -1;
 +
-+    GetSystemTimeAsFileTime(&ft);
-+    uli.LowPart = ft.dwLowDateTime;
-+    uli.HighPart = ft.dwHighDateTime;
-+    usec = (uint64_t)(uli.QuadPart / 10ULL);
-+    usec -= 11644473600000000ULL;
-+
-+    tv->tv_sec = (long)(usec / 1000000ULL);
-+    tv->tv_usec = (long)(usec % 1000000ULL);
++    if (_ftime64_s(&tb) != 0)
++        return -1;
++    tv->tv_sec = (long)tb.time;
++    tv->tv_usec = (long)tb.millitm * 1000L;
 +    return 0;
 +}
 +
@@ -694,10 +683,10 @@ index 00000000..5a6f4b06
 +#endif
 diff --git a/include/unistd.h b/include/unistd.h
 new file mode 100644
-index 00000000..f87f217e
+index 00000000..c81f7d7b
 --- /dev/null
 +++ b/include/unistd.h
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,77 @@
 +#ifndef ASTROMETRY_WINDOWS_UNISTD_H
 +#define ASTROMETRY_WINDOWS_UNISTD_H
 +
@@ -713,7 +702,6 @@ index 00000000..f87f217e
 +#include <string.h>
 +#include <sys/stat.h>
 +#include <stdlib.h>
-+#include <windows.h>
 +
 +#ifndef STDIN_FILENO
 +#define STDIN_FILENO 0
@@ -764,12 +752,12 @@ index 00000000..f87f217e
 +}
 +
 +static __inline int usleep(unsigned int usec) {
-+    Sleep((DWORD)((usec + 999U) / 1000U));
++    _sleep((usec + 999U) / 1000U);
 +    return 0;
 +}
 +
 +static __inline unsigned int sleep(unsigned int sec) {
-+    Sleep((DWORD)(sec * 1000U));
++    _sleep(sec * 1000U);
 +    return 0;
 +}
 +
@@ -897,6 +885,29 @@ index 679e53d3..441b26cf 100644
      kd->fun.nodes_contained = MANGLE(kdtree_nodes_contained);
  }
 -
+diff --git a/libkd/kdtree_internal_fits.c b/libkd/kdtree_internal_fits.c
+index a954c2af..d163117b 100644
+--- a/libkd/kdtree_internal_fits.c
++++ b/libkd/kdtree_internal_fits.c
+@@ -12,6 +12,7 @@
+ #include "errors.h"
+ 
+ #define KDTREE_FITS_VERSION 1
++#define KDTREE_MAX_DIM 100
+ 
+ static char* get_table_name(const char* treename, const char* tabname) {
+     char* rtn;
+@@ -312,8 +313,9 @@ int MANGLE(kdtree_write_fits)(kdtree_fits_t* io, const kdtree_t* kd,
+         fitsbin_chunk_reset(&chunk);
+     }
+     if (kd->minval && kd->maxval) {
+-        double tempranges[kd->ndim * 2 + 1];
++        double tempranges[KDTREE_MAX_DIM * 2 + 1];
+         int d;
++        assert(kd->ndim <= KDTREE_MAX_DIM);
+         memcpy(tempranges, kd->minval, kd->ndim * sizeof(double));
+         memcpy(tempranges + kd->ndim, kd->maxval, kd->ndim * sizeof(double));
+         tempranges[kd->ndim*2] = kd->scale;
 diff --git a/solver/control-program.c b/solver/control-program.c
 index 1bb68ad5..d5dd4cb6 100644
 --- a/solver/control-program.c
