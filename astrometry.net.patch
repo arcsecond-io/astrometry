@@ -81,6 +81,27 @@ index beb49b90..de369a93 100644
  # include <sys/types.h>
  #elif __FreeBSD__
  # include <sys/endian.h>
+diff --git a/include/astrometry/errors.h b/include/astrometry/errors.h
+index d1dd92b5..34c2918b 100644
+--- a/include/astrometry/errors.h
++++ b/include/astrometry/errors.h
+@@ -55,9 +55,9 @@ ATTRIB_FORMAT(printf,4,5)
+ 
+ void report_errno(void);
+ 
+-#define ERROR(fmt, ...) report_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
++#define ERROR(...) report_error(__FILE__, __LINE__, __func__, __VA_ARGS__)
+ 
+-#define SYSERROR(fmt, ...) do { report_errno(); report_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); } while(0)
++#define SYSERROR(...) do { report_errno(); report_error(__FILE__, __LINE__, __func__, __VA_ARGS__); } while(0)
+ 
+ void errors_log_to(FILE* f);
+ 
+@@ -130,4 +130,3 @@ char* error_get_errs(err_t* e, const char* separator);
+ 
+ 
+ #endif
+-
 diff --git a/include/astrometry/keywords.h b/include/astrometry/keywords.h
 index 41212b73..f3c0745c 100644
 --- a/include/astrometry/keywords.h
@@ -107,7 +128,7 @@ index 41212b73..f3c0745c 100644
  # define Pure
  # define Const
 diff --git a/include/astrometry/log.h b/include/astrometry/log.h
-index 0135151a..7988dfe1 100644
+index 0135151a..01f8a9d0 100644
 --- a/include/astrometry/log.h
 +++ b/include/astrometry/log.h
 @@ -8,6 +8,13 @@
@@ -124,7 +145,7 @@ index 0135151a..7988dfe1 100644
  
  enum log_level {
      LOG_NONE,
-@@ -85,14 +92,14 @@ void log_free(log_t* logger);
+@@ -85,28 +92,28 @@ void log_free(log_t* logger);
  
  #define LOG_TEMPLATE(name)                                              \
      void log_##name(const char* file, int line, const char* func, const char* format, ...) \
@@ -141,6 +162,26 @@ index 0135151a..7988dfe1 100644
  
  
  /**
+  * Log a message:
+  */
+ 
+-#define logerr(  x, ...) log_logerr(  __FILE__, __LINE__, __func__, x, ##__VA_ARGS__)
+-#define logmsg(  x, ...) log_logmsg(  __FILE__, __LINE__, __func__, x, ##__VA_ARGS__)
+-#define logverb( x, ...) log_logverb( __FILE__, __LINE__, __func__, x, ##__VA_ARGS__)
+-#define debug(   x, ...) log_logdebug(__FILE__, __LINE__, __func__, x, ##__VA_ARGS__)
+-#define logdebug(x, ...) log_logdebug(__FILE__, __LINE__, __func__, x, ##__VA_ARGS__)
++#define logerr(...) log_logerr(__FILE__, __LINE__, __func__, __VA_ARGS__)
++#define logmsg(...) log_logmsg(__FILE__, __LINE__, __func__, __VA_ARGS__)
++#define logverb(...) log_logverb(__FILE__, __LINE__, __func__, __VA_ARGS__)
++#define debug(...) log_logdebug(__FILE__, __LINE__, __func__, __VA_ARGS__)
++#define logdebug(...) log_logdebug(__FILE__, __LINE__, __func__, __VA_ARGS__)
+ 
+ // log at a particular level.
+-#define loglevel(loglvl, format, ...) log_loglevel(loglvl, __FILE__, __LINE__, __func__, format, ##__VA_ARGS__)
++#define loglevel(loglvl, ...) log_loglevel(loglvl, __FILE__, __LINE__, __func__, __VA_ARGS__)
+ 
+ int log_get_level(void);
+ 
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
 index 780c4b91..2861af4c 100644
 --- a/include/astrometry/os-features.h
@@ -763,10 +804,10 @@ index 00000000..5a6f4b06
 +#endif
 diff --git a/include/unistd.h b/include/unistd.h
 new file mode 100644
-index 00000000..3dffc117
+index 00000000..93043f35
 --- /dev/null
 +++ b/include/unistd.h
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,116 @@
 +#ifndef ASTROMETRY_WINDOWS_UNISTD_H
 +#define ASTROMETRY_WINDOWS_UNISTD_H
 +
@@ -862,6 +903,11 @@ index 00000000..3dffc117
 +    return fd;
 +}
 +
++/* _sleep is deprecated on MSVC but still the compatible backend here. */
++#if defined(_MSC_VER)
++#pragma warning(push)
++#pragma warning(disable:4996)
++#endif
 +static __inline int usleep(unsigned int usec) {
 +    _sleep((usec + 999U) / 1000U);
 +    return 0;
@@ -871,14 +917,26 @@ index 00000000..3dffc117
 +    _sleep(sec * 1000U);
 +    return 0;
 +}
++#if defined(_MSC_VER)
++#pragma warning(pop)
++#endif
 +
 +#endif
 +
 +#endif
 diff --git a/libkd/kdtree_internal.c b/libkd/kdtree_internal.c
-index 679e53d3..441b26cf 100644
+index 679e53d3..4a5e4c13 100644
 --- a/libkd/kdtree_internal.c
 +++ b/libkd/kdtree_internal.c
+@@ -19,7 +19,7 @@
+ #define KDTREE_MAX_RESULTS 1000
+ #define KDTREE_MAX_DIM 100
+ 
+-#define WARNING(x, ...) fprintf(stderr, x, ## __VA_ARGS__)
++#define WARNING(...) fprintf(stderr, __VA_ARGS__)
+ 
+ #define MANGLE(x) KDMANGLE(x, ETYPE, DTYPE, TTYPE)
+ 
 @@ -581,7 +581,7 @@ static void kdtree_nn_bb(const kdtree_t* kd, const etype* query,
      anbool use_tquery = FALSE;
      anbool use_tmath = FALSE;
@@ -1392,7 +1450,7 @@ index ee3150c4..75813246 100644
      return sipout;
  }
 diff --git a/solver/verify.c b/solver/verify.c
-index ebced604..636b72a6 100644
+index ebced604..8f15afab 100644
 --- a/solver/verify.c
 +++ b/solver/verify.c
 @@ -21,9 +21,9 @@
@@ -1407,6 +1465,15 @@ index ebced604..636b72a6 100644
  #endif
  
  #define DATALOG_MASK_VERIFY 0x1
+@@ -33,7 +33,7 @@
+ 
+ #define DLOG_ODDS_MIN log(1e6)
+ 
+-#define dlog(lev, fmt, ...) data_log(DATALOG_MASK_VERIFY, lev, fmt, ##__VA_ARGS__)
++#define dlog(lev, ...) data_log(DATALOG_MASK_VERIFY, lev, __VA_ARGS__)
+ 
+ struct verify_s {
+     const sip_t* wcs;
 @@ -1764,4 +1764,3 @@ double verify_star_lists_ror(double* refxys, int NR,
  	
      return X;
@@ -1448,6 +1515,24 @@ index 2b6323bb..26061844 100644
              bl_append(foundquads, &fq);
          }
  
+diff --git a/util/cfitsutils.h b/util/cfitsutils.h
+index 63f14adf..903e8523 100644
+--- a/util/cfitsutils.h
++++ b/util/cfitsutils.h
+@@ -27,11 +27,11 @@ static void cfitserr(int status) {
+     sl_free2(msgs);
+ }
+ 
+-#define CFITS_CHECK(msg, ...) \
++#define CFITS_CHECK(...) \
+ do { \
+ if (status) { \
+ cfitserr(status); \
+-ERROR(msg, ##__VA_ARGS__); \
++ERROR(__VA_ARGS__); \
+ goto bailout; \
+ } \
+ } while(0)
 diff --git a/util/fitsbin.c b/util/fitsbin.c
 index e18e0ca8..9c3a7ada 100644
 --- a/util/fitsbin.c
