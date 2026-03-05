@@ -748,10 +748,10 @@ index 00000000..5a6f4b06
 +#endif
 diff --git a/include/unistd.h b/include/unistd.h
 new file mode 100644
-index 00000000..47263520
+index 00000000..3dffc117
 --- /dev/null
 +++ b/include/unistd.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,108 @@
 +#ifndef ASTROMETRY_WINDOWS_UNISTD_H
 +#define ASTROMETRY_WINDOWS_UNISTD_H
 +
@@ -789,6 +789,29 @@ index 00000000..47263520
 +#endif
 +#ifndef X_OK
 +#define X_OK 0
++#endif
++
++#ifndef S_IRUSR
++#define S_IRUSR _S_IREAD
++#endif
++#ifndef S_IWUSR
++#define S_IWUSR _S_IWRITE
++#endif
++#ifndef S_IRGRP
++#define S_IRGRP _S_IREAD
++#endif
++#ifndef S_IWGRP
++#define S_IWGRP _S_IWRITE
++#endif
++#ifndef S_IROTH
++#define S_IROTH _S_IREAD
++#endif
++#ifndef S_IWOTH
++#define S_IWOTH _S_IWRITE
++#endif
++
++#ifndef O_SYNC
++#define O_SYNC 0
 +#endif
 +
 +typedef intptr_t ssize_t;
@@ -999,6 +1022,27 @@ index 9016b04a..cdc9a092 100644
  
  
 -
+diff --git a/qfits-an/qfits_memory.c b/qfits-an/qfits_memory.c
+index fb1c241c..d29cb438 100644
+--- a/qfits-an/qfits_memory.c
++++ b/qfits-an/qfits_memory.c
+@@ -314,13 +314,15 @@ void * qfits_memory_malloc(
+         /* Create swap file with rights: rw-rw-rw- */
+         swapfileid = ++ qfits_memory_table.file_reg;
+         fname = qfits_memory_tmpfilename(swapfileid);
+-        mode_t mod = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH;
++        int mod = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH;
+         swapfd = open(fname, O_RDWR | O_CREAT, mod);
+         if (swapfd==-1) {
+             fprintf(stderr, "qfits_mem: cannot create swap file\n");
+             exit(-1);
+         }
++#if !defined(_WIN32)
+         fchmod(swapfd, mod);
++#endif
+ 
+         /* Compute number of passes to insert buffer */
+         nbufs = size / MEMPAGESZ;
 diff --git a/solver/control-program.c b/solver/control-program.c
 index 1bb68ad5..d5dd4cb6 100644
 --- a/solver/control-program.c
