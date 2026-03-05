@@ -399,10 +399,10 @@ index 00000000..6b993989
 +#endif
 diff --git a/include/sys/mman.h b/include/sys/mman.h
 new file mode 100644
-index 00000000..2e10eaaa
+index 00000000..7ffbeefa
 --- /dev/null
 +++ b/include/sys/mman.h
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,57 @@
 +#ifndef ASTROMETRY_WINDOWS_SYS_MMAN_H
 +#define ASTROMETRY_WINDOWS_SYS_MMAN_H
 +
@@ -418,6 +418,7 @@ index 00000000..2e10eaaa
 +#define PROT_READ 0x1
 +#define PROT_WRITE 0x2
 +
++#define MAP_SHARED 0x01
 +#define MAP_PRIVATE 0x02
 +
 +#define MAP_FAILED ((void*)-1)
@@ -683,10 +684,10 @@ index 00000000..5a6f4b06
 +#endif
 diff --git a/include/unistd.h b/include/unistd.h
 new file mode 100644
-index 00000000..c81f7d7b
+index 00000000..47263520
 --- /dev/null
 +++ b/include/unistd.h
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,85 @@
 +#ifndef ASTROMETRY_WINDOWS_UNISTD_H
 +#define ASTROMETRY_WINDOWS_UNISTD_H
 +
@@ -740,6 +741,14 @@ index 00000000..c81f7d7b
 +#define read _read
 +#define unlink _unlink
 +#define write _write
++#define fileno _fileno
++
++#ifndef fseeko
++#define fseeko _fseeki64
++#endif
++#ifndef ftello
++#define ftello _ftelli64
++#endif
 +
 +static __inline int mkstemp(char* tmpl) {
 +    int fd;
@@ -908,6 +917,24 @@ index a954c2af..d163117b 100644
          memcpy(tempranges, kd->minval, kd->ndim * sizeof(double));
          memcpy(tempranges + kd->ndim, kd->maxval, kd->ndim * sizeof(double));
          tempranges[kd->ndim*2] = kd->scale;
+diff --git a/qfits-an/anqfits.c b/qfits-an/anqfits.c
+index 9016b04a..cdc9a092 100644
+--- a/qfits-an/anqfits.c
++++ b/qfits-an/anqfits.c
+@@ -38,7 +38,7 @@
+ #define debug printf
+ #else
+ #define qdebug( code ) {}
+-#define debug(args...)
++#define debug(...) ((void)0)
+ #endif
+ 
+ int fits_get_atom_size(tfits_type type) {
+@@ -1288,4 +1288,3 @@ void* anqfits_readpix(const anqfits_t* qf, int ext,
+ 
+ 
+ 
+-
 diff --git a/solver/control-program.c b/solver/control-program.c
 index 1bb68ad5..d5dd4cb6 100644
 --- a/solver/control-program.c
