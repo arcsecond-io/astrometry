@@ -170,6 +170,7 @@ if compiler.startswith("Clang") or compiler.startswith("GCC"):
 
 if platform.system() == "Windows":
     define_macros += [
+        ("_USE_MATH_DEFINES", "1"),
         ("_CRT_SECURE_NO_WARNINGS", "1"),
         ("_CRT_NONSTDC_NO_WARNINGS", "1"),
     ]

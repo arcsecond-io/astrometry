@@ -142,10 +142,10 @@ index 0135151a..7988dfe1 100644
  
  /**
 diff --git a/include/astrometry/os-features.h b/include/astrometry/os-features.h
-index 780c4b91..d13c784e 100644
+index 780c4b91..2861af4c 100644
 --- a/include/astrometry/os-features.h
 +++ b/include/astrometry/os-features.h
-@@ -18,6 +18,25 @@
+@@ -18,6 +18,34 @@
  #define	MAX(a,b) (((a)>(b))?(a):(b))
  #endif
  
@@ -166,12 +166,21 @@ index 780c4b91..d13c784e 100644
 +#ifndef M_SQRT1_2
 +#define M_SQRT1_2 0.70710678118654752440
 +#endif
++#ifndef M_PI
++#define M_PI 3.14159265358979323846
++#endif
++#ifndef M_PI_2
++#define M_PI_2 1.57079632679489661923
++#endif
++#ifndef M_PI_4
++#define M_PI_4 0.78539816339744830962
++#endif
 +#endif
 +
  // isfinite() on Solaris; from
  // https://code.google.com/p/redis/issues/detail?id=20
  #if defined(__sun) && defined(__GNUC__)
-@@ -52,13 +71,15 @@
+@@ -52,13 +80,15 @@
  
  
  // As suggested in http://gcc.gnu.org/onlinedocs/gcc-4.3.0/gcc/Function-Names.html
