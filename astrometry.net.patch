@@ -1,3 +1,23 @@
+diff --git a/catalogs/2mass.c b/catalogs/2mass.c
+index 194318fe..f8ee27a4 100644
+--- a/catalogs/2mass.c
++++ b/catalogs/2mass.c
+@@ -93,8 +93,8 @@ static int parse_cc_flag(char flag, char* val) {
+ #define ensure(c, f) { if (c!='|') { fprintf(stderr, "Expected '|' following field %s in 2MASS line.\n", f); return -1; }}
+ 
+ //#define printval printf
+-//#define printval(s,args...) printf(s,args)
+-#define printval(s,args...) {}
++//#define printval(s, ...) printf(s, __VA_ARGS__)
++#define printval(...) ((void)0)
+ 
+ int twomass_cc_flag(unsigned char val, unsigned char flag) {
+     return (val == flag);
+@@ -565,4 +565,3 @@ int twomass_parse_entry(struct twomass_entry* e, const char* line) {
+ 
+     return 0;
+ }
+-
 diff --git a/include/arpa/inet.h b/include/arpa/inet.h
 new file mode 100644
 index 00000000..fb781b8a
@@ -1210,6 +1230,48 @@ index ee3150c4..75813246 100644
  
      return sipout;
  }
+diff --git a/solver/verify.c b/solver/verify.c
+index ebced604..636b72a6 100644
+--- a/solver/verify.c
++++ b/solver/verify.c
+@@ -21,9 +21,9 @@
+ #define DEBUGVERIFY 0
+ 
+ #if DEBUGVERIFY
+-#define debug2(args...) logdebug(args)
++#define debug2(...) logdebug(__VA_ARGS__)
+ #else
+-#define debug2(args...)
++#define debug2(...) ((void)0)
+ #endif
+ 
+ #define DATALOG_MASK_VERIFY 0x1
+@@ -1764,4 +1764,3 @@ double verify_star_lists_ror(double* refxys, int NR,
+ 	
+     return X;
+ }
+-
+diff --git a/solver/verify2.c b/solver/verify2.c
+index 4395f25b..76ff87a7 100644
+--- a/solver/verify2.c
++++ b/solver/verify2.c
+@@ -18,9 +18,9 @@
+ 
+ #define DEBUGVERIFY 1
+ #if DEBUGVERIFY
+-//#define debug(args...) fprintf(stderr, args)
++//#define debug(...) fprintf(stderr, __VA_ARGS__)
+ #else
+-#define debug(args...)
++#define debug(...) ((void)0)
+ #endif
+ 
+ #include "fitsioutils.h"
+@@ -398,4 +398,3 @@ void verify_get_all_matches(const double* refxys, int NR,
+ 
+ 
+ 
+-
 diff --git a/solver/whynot.c b/solver/whynot.c
 index 2b6323bb..26061844 100644
 --- a/solver/whynot.c
