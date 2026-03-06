@@ -10,8 +10,8 @@ on:
 env:
   CIBW_SKIP: cp36-* cp37-* cp38-* pp* *i686 *win32
 
-  # cibuildhweel macOS configuration
-  CIBW_ARCHS_MACOS: native
+  # cibuildwheel macOS configuration: build both arm64 and x86_64 on the ARM runner
+  CIBW_ARCHS_MACOS: arm64 x86_64
 
   # cibuildhweel linux configuration
   CIBW_ARCHS_LINUX: x86_64
@@ -29,8 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [macos-13, macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,8 +48,7 @@ jobs:
     strategy:
       matrix:
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [macos-13, macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/setup-python@v5
         with:
