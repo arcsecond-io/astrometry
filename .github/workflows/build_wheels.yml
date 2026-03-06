@@ -30,7 +30,7 @@ jobs:
     strategy:
       matrix:
         # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [macos-13, macos-latest, ubuntu-latest]
+        os: [macos-13, macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +50,7 @@ jobs:
       matrix:
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         # macos-13 is an Intel runner, macos-latest is an ARM runner
-        os: [macos-13, macos-latest, ubuntu-latest]
+        os: [macos-13, macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -64,7 +64,7 @@ jobs:
       - run: python -m pip install toml
       - run: python .github/workflows/install_dependencies.py
       - run: ls wheelhouse
-      - run: python -m pip install --no-index --find-links wheelhouse astrometry
+      - run: python -m pip install --no-index --find-links wheelhouse arcsecond-astrometry
       - run: python -c 'import astrometry'
   build_sdist:
     name: Build source distribution
