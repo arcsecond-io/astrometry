@@ -2122,3 +2122,34 @@ index 9f8f4d52..9b72322f 100644
 -
 -
 -
+diff --git a/qfits-an/qfits_time.c b/qfits-an/qfits_time.c
+index 55ab199f..05f42ed1 100644
+--- a/qfits-an/qfits_time.c
++++ b/qfits-an/qfits_time.c
+@@ -38,6 +38,9 @@
+ #include <sys/time.h>
+ 
+ #include "qfits_time.h"
++#ifdef _WIN32
++#include "os-features.h"
++#endif
+ 
+ /*-----------------------------------------------------------------------------
+                                    Macros
+diff --git a/util/an-endian.c b/util/an-endian.c
+index 67cb6aa3..5c025321 100644
+--- a/util/an-endian.c
++++ b/util/an-endian.c
+@@ -3,6 +3,12 @@
+  # Licensed under a 3-clause BSD style license - see LICENSE
+  */
+ 
++#ifdef _MSC_VER
++/* MSVC: bare 'inline' does not emit external symbols; strip it so that
++ * these functions are compiled as regular extern functions. */
++#define inline
++#endif
++
+ #include "an-endian.h"
+ 
+ /*
